@@ -2,8 +2,8 @@
   <div class="appRoot">
     <IconLibrary/>
     <div class="ativosGroup">
-      <h4>Ativos</h4>
-      <table class="ordemList">
+      <h2>Ativos</h2>
+      <table class="ativosList">
         <thead>
           <tr>
             <th>Empresa</th>
@@ -24,12 +24,12 @@
         </tbody>
       </table>
     </div>
-    <h4>Nova Ordem</h4>
     <div class="searchGroup">
+      <h2>Nova Ordem</h2>
       <div class="inputBox">
         <label class="inputBox__label" for="search">Empresa:</label>
         <div class="inputWraper">
-          <input class="inputBox__field" type="text" name="search" v-model="search.term">
+          <input class="inputBox__field" type="text" name="search" v-model="novaOrdem.simbolo">
           <IconButton :action="buscaEmpresa" icon-id="iconSearch"/>
         </div>
         <ul class="searchSuggestion" v-if="search.isSuggestionOpen">
@@ -41,12 +41,14 @@
       <div class="inputBox">
         <label for="tipo">Tipo:</label>
         <select name="tipo" v-model="novaOrdem.tipo">
-          <option v-for="(tipo, index) of ativoTipo" :value="tipo[0]" :key="index">{{tipo[1]}}</option>
+          <option v-for="(option, index) in ativoTipo" v-bind:value="option.value" :key="index">
+            {{ option.text }}
+          </option>
         </select>
       </div>
       <div class="inputBox">
         <label class="inputBox__label" for="data">Data da Compra:</label>
-        <input type="date" class="inputBox__field" name="data" v-model="novaOrdem.dataCompra">
+        <input type="date" class="inputBox__field" name="data" v-model="novaOrdem.data">
       </div>
       <div class="inputBox">
         <label class="inputBox__label" for="pu">Preço unitário:</label>
@@ -57,6 +59,29 @@
         <input class="inputBox__field" type="number" name="qtd" v-model="novaOrdem.quantidade" min="0">
       </div>
       <button class="ordemGroup__btnSave" v-on:click="salvarOrdem">Salvar</button>
+    </div>
+    <div class="ordemListGroup">
+      <h2>Transações</h2>
+      <table class="ordemList">
+        <thead>
+          <tr>
+            <th>Empresa</th>
+            <th>Tipo</th>
+            <th>Data</th>
+            <th>Qtd</th>
+            <th>Preço Unitário</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(transaction, index) of transactions" :key="index">
+            <td>{{transaction.simbolo}}</td>
+            <td>{{transaction.tipoName}}</td>
+            <td>{{transaction.data}}</td>
+            <td>{{transaction.quantidade}}</td>
+            <td>{{transaction.precoUnitario}}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <div class="resultGroup">{{novaOrdem}}</div>
   </div>
@@ -70,8 +95,9 @@ import IconButton from './components/IconButton'
 import IconLibrary from './components/IconLibrary'
 // Models
 import Empresa from './models/Empresa.js';
-import Ativo from './models/Ativo.js'
-import { Tipo } from './models/Tipo.js'
+import Ativo from './models/Ativo.js';
+import Ordem from './models/Ordem.js';
+import { Tipo } from './models/Tipo.js';
 
 export default {
   name: 'App',
@@ -82,28 +108,39 @@ export default {
   },
   data() {
     return {
-      apiKey: 'E2XIAIDSCC1KIQS3',
-      carteira: [
-        new Ativo('ITSA4', Tipo.ACAO, 100, 1328),
-        new Ativo('VINO11', Tipo.FII, 40, 2680)
-      ],
+      CONFIG: {
+        apiKey: 'E2XIAIDSCC1KIQS3'
+      },
+      carteira: [],
+      transactions: [],
       search: {
         term: '',
         matches: [],
         isSuggestionOpen: false
       },
-      novaOrdem: {
-        simbolo: null,
-        tipo: 1,
-        dataCompra: this.formatedDate,
-        precoUnitario: 0,
-        quantidade: 0
-
-      }
+      novaOrdem: new Ordem(
+        '',
+        1,
+        this.formatDate(),
+        0,
+        0
+      )
     }
   },
   computed: {
-    formatedDate() {
+    ativoTipo() {
+      const tmpType = Object.entries(Tipo.name);
+      const type = tmpType.map((type) => {
+        return {
+          value: type[0],
+          text: type[1]
+        }
+      });
+      return type;
+    }
+  },
+  methods: {
+    formatDate() {
       const today = new Date();
       const date = {
         year: today.getFullYear(),
@@ -112,19 +149,13 @@ export default {
       }
       return `${date.year}-${date.month}-${date.day}`;
     },
-    ativoTipo() {
-      const type = new Map(Object.entries(Tipo.name));
-      return type;
-    }
-  },
-  methods: {
     buscaEmpresa() {
       // Open suggestion dialog
       this.search.isSuggestionOpen = true;
       fetch(
         `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${
-          this.search.term
-        }&apikey=${this.apiKey}`
+          this.novaOrdem.simbolo
+        }&apikey=${this.CONFIG.apiKey}`
       ).then(response => {
         response.json().then(result => {
           this.search.matches = this.filterMatches(result.bestMatches);
@@ -134,12 +165,20 @@ export default {
     selecionaEmpresa(empresa) {
       this.novaOrdem.simbolo = empresa.simbolo;
       this.search.isSuggestionOpen = false;
+      // Find price
+      fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${empresa.simboloMercado}&apikey=${this.CONFIG.apiKey}`)
+        .then((response) => {
+          response.json()
+            .then((result) => {
+              this.novaOrdem.precoUnitario = Number(result['Global Quote']['05. price']).toFixed(2);
+            })
+        });
     },
     filterMatches(matches = []) {
       const filteredMatches = [];
 
       matches.forEach(match => {
-        if (match['8. currency'] === 'BRL') {
+        if (match['8. currency'] === 'BRL' && match['3. type'] === 'Equity') {
           const empresa = new Empresa(
             this.sanityzeSymbol(match['1. symbol']),
             match['2. name']
@@ -155,9 +194,10 @@ export default {
       return symbolParts[0]
     },
     salvarOrdem() {
-      // Procurar ordem em carteira
+      this.transactions.push(this.novaOrdem)
+      // Atualizar ativo na carteira
       const result = this.carteira.find((ativo) => {
-        return ativo.simbolo === this.novaOrdem.simbolo;
+        return String(ativo.simbolo.toLowerCase()) === String(this.novaOrdem.simbolo).toLowerCase();
       });
 
       if (result === undefined) {
@@ -170,8 +210,8 @@ export default {
 
         this.carteira.push(novoAtivo);
       } else {
-        result.addQuantidade(100);
-        result.addCusto(100 * 12);
+        result.addQuantidade(this.novaOrdem.quantidade);
+        result.addCusto(this.novaOrdem.precoUnitario * this.novaOrdem.quantidade);
       }
     }
   }

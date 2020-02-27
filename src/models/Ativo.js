@@ -4,8 +4,8 @@ export default class Ativo {
   constructor(simbolo = '', tipo = 0, quantidade = 0, custo = 0) {
     this._simbolo = simbolo;
     this._tipo = tipo;
-    this._quantidade = quantidade;
-    this._custo = custo;
+    this._quantidade = Number(quantidade);
+    this._custo = Number(custo);
   }
 
   get simbolo() {
@@ -24,9 +24,9 @@ export default class Ativo {
     return this._custo;
   }
   addQuantidade(quantidade = 0) {
-    this._quantidade += quantidade;
+    this._quantidade += Number(quantidade);
   }
   addCusto(custo = 0) {
-    this._custo += custo;
+    this._custo += Number(custo);
   }
 }

@@ -11,6 +11,6 @@ export default class Empresa {
     return this._simbolo;
   }
   get simboloMercado() {
-    return `${this._simbolo}.SAO`;
+    return `${this._simbolo}.SA`;
   }
 }
